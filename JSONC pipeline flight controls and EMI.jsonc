@@ -1,0 +1,93 @@
+// JSONC File by Alejandro Choapa
+// The purpose of this file is to create a pipeline that orchestrates three Databricks notebooks with data from Azure Data Factory
+{
+  // first we need to provide the logical name of the pipeline as it will appear in ADF or synapse studio
+  "name": "flight_EMI_and_controls_pipeline",
+
+  // All runtime configuration for this pipeline is found in properties
+  "properties": {
+    // ADF executes a directed acyclic graph
+    // Each object in this array is one node in the graph.
+    "activities": [
+
+      // First, we must validate the quality of the data
+      // Our goal is to run a notebook that computes per-window quality metrics and scores
+      // our output must create Gold QC tables used by downstream steps
+      {
+        "name": "Validate_Quality",
+
+        // Next we must launch a Databricks notebook job
+        "type": "DatabricksNotebook",
+
+        // No dependencies
+        // this is ypour first step in the pipeline
+        "dependsOn": [],
+
+        // specify setting specifically yo databricks
+        "typeProperties": {
+          // Path to the notebook to run
+          "notebookPath": "/Repos/flight/notebooks/02_quality_rules_and_scores",
+
+          // values map passed to the notebook as parameters
+          "baseParameters": {} // empty at this particular momment
+        },
+
+        // Execution policy for this node (timeouts, retry, etc.)
+        "policy": {
+          //IMPORTANT! set a hard cap!!
+          "timeout": "01:00:00" // if it runs for longer than an hour it cancels
+        }
+      },
+
+      // Our goal for this second step is to compute stability features and correlate them with EMI levels
+      {
+        "name": "Features_and_Correlation",
+        "type": "DatabricksNotebook",
+
+        // This node waits for the QC step to complete successfully
+        "dependsOn": [
+          {
+            "activity": "Validate_Quality",
+
+            // Only proceed when the upstream status is succeeded
+            "dependencyConditions": [ "Succeeded" ]
+          }
+        ],
+
+        "typeProperties": {
+          // Notebook that computes features and emits correlation metrics
+          "notebookPath": "/Repos/flight/notebooks/03_features_and_emi_correlation",
+
+          // no parameters
+          "baseParameters": {}
+        }
+      },
+
+//finally, we must ensure this is properly maintaing therefore, 
+      // our goal is to ptovide housekeeping to our delta lake
+   // make sure this is dependent, meaning it will only run if previous quality passes
+      {
+        "name": "Compaction_Maintenance",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Features_and_Correlation",
+            "dependencyConditions": [ "Succeeded" ]
+          }
+        ],
+        "typeProperties": {
+          "notebookPath": "/Repos/flight/notebooks/04_batch_backfill_and_compaction",
+          "baseParameters": {}
+        }
+      }
+    ],
+
+// we must add anotation to provided cleanner outcomes   
+    "annotations": [
+      "flight", // domain: UAV/flight data
+      "emi", // electromagnetic interference monitoring
+      "quality", // data quality checks and scoring
+      "spark" // processing engine used by notebooks
+    ]
+  }
+}
