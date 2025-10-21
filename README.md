@@ -1,0 +1,2 @@
+# Flight-Telemetry-Data-Engineering-Pipeline-Real-Time-Quality-EMI-and-Control-Analysis
+A Databricks-based PySpark pipeline for ingesting, cleaning, and analyzing real-time flight telemetry data. It computes data quality scores, detects EMI-induced anomalies, and derives control-surface stability metrics from IMU and servo signals. Complements the C++ Flight Stabilization Firmware with end-to-end cloud analytics.
